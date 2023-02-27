@@ -23,7 +23,7 @@ def minimax(n: tuple, maximizer_turn: bool):
 # minimax_alpha_beta
 
 @lru_cache(maxsize=None)
-def minimax_alpha_beta(n: tuple, maximizer_turn: bool, alpha, beta):
+def minimax_alpha_beta(n: tuple, maximizer_turn: bool, alpha: int, beta: int):
     if is_final_state(n):
         return utility(n)
     if maximizer_turn:
@@ -42,8 +42,40 @@ def minimax_alpha_beta(n: tuple, maximizer_turn: bool, alpha, beta):
 
 # depth_limited_minimax
 
+@lru_cache(maxsize=None)
+def depth_limited_minimax(n: tuple, d: int, maximizer_turn: bool):
+    if is_final_state(n) or d == 0:
+        return heuristic(n)
+    if maximizer_turn:
+        v = -inf
+        for s in successor(n, True):
+            v = max(v, depth_limited_minimax(s, d - 1, False))
+        return v
+    else:
+        v = inf
+        for s in successor(n, False):
+            v = min(v, depth_limited_minimax(s, d - 1, True))
+        return v
+
 
 # depth_limited_minimax_alpha_beta
+
+@lru_cache(maxsize=None)
+def depth_limited_minimax_alpha_beta(n: tuple, d: int, maximizer_turn: bool, alpha: int, beta: int):
+    if is_final_state(n) or d == 0:
+        return heuristic(n)
+    if maximizer_turn:
+        for s in successor(n, True):
+            alpha = max(alpha, depth_limited_minimax_alpha_beta(s, d - 1, False, alpha, beta))
+            if alpha >= beta:
+                return alpha
+        return alpha
+    else:
+        for s in successor(n, False):
+            beta = min(beta, depth_limited_minimax_alpha_beta(s, d - 1, True, alpha, beta))
+            if alpha >= beta:
+                return beta
+        return beta
 
 
 def is_final_state(n: tuple):
@@ -61,6 +93,35 @@ def is_final_state(n: tuple):
     ):
         return True
     return False
+
+
+def heuristic(n: tuple):
+    if (
+        (n[0] == 'x' and n[1] == 'x' and n[2] == 'x') or
+        (n[3] == 'x' and n[4] == 'x' and n[5] == 'x') or
+        (n[6] == 'x' and n[7] == 'x' and n[8] == 'x') or
+        (n[0] == 'x' and n[3] == 'x' and n[6] == 'x') or
+        (n[1] == 'x' and n[4] == 'x' and n[7] == 'x') or
+        (n[2] == 'x' and n[5] == 'x' and n[8] == 'x') or
+        (n[0] == 'x' and n[4] == 'x' and n[8] == 'x') or
+        (n[2] == 'x' and n[4] == 'x' and n[6] == 'x')
+    ):
+        return 1
+    if (
+        (n[0] == 'o' and n[1] == 'o' and n[2] == 'o') or
+        (n[3] == 'o' and n[4] == 'o' and n[5] == 'o') or
+        (n[6] == 'o' and n[7] == 'o' and n[8] == 'o') or
+        (n[0] == 'o' and n[3] == 'o' and n[6] == 'o') or
+        (n[1] == 'o' and n[4] == 'o' and n[7] == 'o') or
+        (n[2] == 'o' and n[5] == 'o' and n[8] == 'o') or
+        (n[0] == 'o' and n[4] == 'o' and n[8] == 'o') or
+        (n[2] == 'o' and n[4] == 'o' and n[6] == 'o')
+    ):
+        return -1
+    if not n.count('_'):
+        return 0
+    # add heuristics here:
+    return 0
 
 
 def utility(n: tuple):
