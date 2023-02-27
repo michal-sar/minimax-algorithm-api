@@ -89,7 +89,7 @@ def depth_limited_minimax_alpha_beta(yellow_tokens: int, token_mask: int, d: int
                                      maximizer_turn: bool, alpha: int, beta: int):
     if maximizer_turn:
         red_tokens = ~yellow_tokens & token_mask
-        is_final_state, h = utility(red_tokens, token_mask)
+        is_final_state, h = heuristic(red_tokens, token_mask)
         if d == 0 or is_final_state:
             return -h
         for move in possible_moves(token_mask):
@@ -101,7 +101,7 @@ def depth_limited_minimax_alpha_beta(yellow_tokens: int, token_mask: int, d: int
                 return alpha
         return alpha
     else:
-        is_final_state, h = utility(yellow_tokens, token_mask)
+        is_final_state, h = heuristic(yellow_tokens, token_mask)
         if d == 0 or is_final_state:
             return h
         for move in possible_moves(token_mask):
