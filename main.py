@@ -1,12 +1,14 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from tic_tac_toe import tic_tac_toe
 from connect_four import connect_four
+from multiprocessing.pool import Pool
+from asyncio import get_event_loop, CancelledError
+from json import loads
 from math import inf
 
-from timeit import default_timer
-from memory_profiler import memory_usage
-from gc import collect
+# from timeit import default_timer
+# from gc import collect
 
 app = FastAPI()
 
@@ -17,11 +19,13 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # origins,
+    allow_origins=[origins],
     allow_credentials=True,
     allow_methods=["GET"],
     allow_headers=["*"],
 )
+
+websocket_connections = 0
 
 
 def validate_tic_tac_toe_board(board: str):
@@ -83,19 +87,76 @@ def validate_depth_limit(depth_limit: bool = False, depth_limit_value: int = Non
     return depth_limit_value
 
 
-@app.get("/status")
-async def return_status():
-    return {"status": "online"}
+async def apply_async_task(websocket, func, *args):
+    pool = Pool(1)
+
+    loop = get_event_loop()
+    future = loop.create_future()
+
+    def future_set_result(result):
+        future.set_result(result)
+
+    pool.apply_async(func, args, callback=future_set_result)
+
+    try:
+        # print("Waiting...")
+        result = await future
+        # print(f"Finished: {result}")
+        await websocket.send_json({'evaluations': result[0], 'id': result[1]})
+        # pool.terminate() <- ???
+
+    except CancelledError:
+        pool.terminate()
+        # print("Cancelled!")
+        raise
 
 
-@app.get("/tic_tac_toe/{board}")
-async def evaluate_tic_tac_toe(
-    board: str = Depends(validate_tic_tac_toe_board),
-    alpha_beta_pruning: bool = False,
-    depth_limit: bool = False,
-    depth_limit_value: int = Depends(validate_depth_limit),
+@app.websocket("/ws")
+async def ws_endpoint(
+    websocket: WebSocket,
 ):
-    start_time = default_timer()
+    current_task = None
+    global websocket_connections
+
+    loop = get_event_loop()
+
+    await websocket.accept()
+    websocket_connections += 1
+    # print(f"Number of connections: {websocket_connections}")
+    try:
+        while True:
+            message = await websocket.receive_text()
+            data = loads(message)
+
+            if data['type'] == 'tic_tac_toe':
+                if current_task is not None:
+                    current_task.cancel()
+                current_task = loop.create_task(apply_async_task(websocket, ws_evaluate_tic_tac_toe, data))
+
+            elif data['type'] == 'connect_four':
+                if current_task is not None:
+                    current_task.cancel()
+                current_task = loop.create_task(apply_async_task(websocket, ws_evaluate_connect_four, data))
+
+            elif data['type'] == 'cancel_task':
+                if current_task is not None:
+                    current_task.cancel()
+                    current_task = None
+
+    except WebSocketDisconnect:
+        if current_task is not None:
+            current_task.cancel()
+        websocket_connections -= 1
+        # print(f"Number of connections: {websocket_connections}")
+
+
+def ws_evaluate_tic_tac_toe(data):
+    # start_time = default_timer()
+
+    board = validate_tic_tac_toe_board(data['board'])
+    alpha_beta_pruning: bool = data['alpha_beta_pruning']
+    depth_limit: bool = data['depth_limit']
+    depth_limit_value = validate_depth_limit(data['depth_limit'], data['depth_limit_value'])
 
     x_count = board.count('x')
     o_count = board.count('o')
@@ -108,12 +169,9 @@ async def evaluate_tic_tac_toe(
             evaluations = [tic_tac_toe.minimax(s, True)
                            for s in tic_tac_toe.successor(board, False)]
 
-        mem_usage = memory_usage((tic_tac_toe.minimax, (board, True)))
-        max_mem_usage = max(mem_usage)
-        print(f"Memory usage: {max_mem_usage:.2f} MB")
-
-        cache_info = tic_tac_toe.minimax.cache_info()
+        # cache_info = tic_tac_toe.minimax.cache_info()
         tic_tac_toe.minimax.cache_clear()
+
     if alpha_beta_pruning and not depth_limit:
         if x_count == o_count:
             evaluations = [tic_tac_toe.minimax_alpha_beta(s, False, -inf, inf)
@@ -122,12 +180,9 @@ async def evaluate_tic_tac_toe(
             evaluations = [tic_tac_toe.minimax_alpha_beta(s, True, -inf, inf)
                            for s in tic_tac_toe.successor(board, False)]
 
-        mem_usage = memory_usage((tic_tac_toe.minimax_alpha_beta, (board, True, -inf, inf)))
-        max_mem_usage = max(mem_usage)
-        print(f"Memory usage: {max_mem_usage:.2f} MB")
-
-        cache_info = tic_tac_toe.minimax_alpha_beta.cache_info()
+        # cache_info = tic_tac_toe.minimax_alpha_beta.cache_info()
         tic_tac_toe.minimax_alpha_beta.cache_clear()
+
     if not alpha_beta_pruning and depth_limit:
         if x_count == o_count:
             evaluations = [tic_tac_toe.depth_limited_minimax(s, depth_limit_value - 1, False)
@@ -136,13 +191,9 @@ async def evaluate_tic_tac_toe(
             evaluations = [tic_tac_toe.depth_limited_minimax(s, depth_limit_value - 1, True)
                            for s in tic_tac_toe.successor(board, False)]
 
-        # mem_usage = memory_usage((tic_tac_toe.depth_limited_minimax, (board, depth_limit_value,
-        #                                                               True)))
-        # max_mem_usage = max(mem_usage)
-        # print(f"Memory usage: {max_mem_usage:.2f} MB")
-
-        cache_info = tic_tac_toe.depth_limited_minimax.cache_info()
+        # cache_info = tic_tac_toe.depth_limited_minimax.cache_info()
         tic_tac_toe.depth_limited_minimax.cache_clear()
+
     if alpha_beta_pruning and depth_limit:
         if x_count == o_count:
             evaluations = [tic_tac_toe.depth_limited_minimax_alpha_beta(s, depth_limit_value - 1, False, -inf, inf)
@@ -151,35 +202,29 @@ async def evaluate_tic_tac_toe(
             evaluations = [tic_tac_toe.depth_limited_minimax_alpha_beta(s, depth_limit_value - 1, True, -inf, inf)
                            for s in tic_tac_toe.successor(board, False)]
 
-        # mem_usage = memory_usage((tic_tac_toe.depth_limited_minimax_alpha_beta, (board, depth_limit_value,
-        #                                                                          True, -inf, inf)))
-        # max_mem_usage = max(mem_usage)
-        # print(f"Memory usage: {max_mem_usage:.2f} MB")
-
-        cache_info = tic_tac_toe.depth_limited_minimax_alpha_beta.cache_info()
+        # cache_info = tic_tac_toe.depth_limited_minimax_alpha_beta.cache_info()
         tic_tac_toe.depth_limited_minimax_alpha_beta.cache_clear()
 
-    print(f"\nCache: On\nExecution time: {default_timer() - start_time:.7f}")
-    print(f"Evaluations: {evaluations}")
+    # print(f"\nCache: On\nExecution time: {default_timer() - start_time:.7f}")
+    # print(f"Evaluations: {evaluations}")
 
-    print(f"Cache size: {cache_info.currsize}")
-    print(f"Hits: {cache_info.hits}")
-    print(f"Misses: {cache_info.misses}\n")
+    # print(f"Cache size: {cache_info.currsize}")
+    # print(f"Hits: {cache_info.hits}")
+    # print(f"Misses: {cache_info.misses}\n")
 
-    collect()
-    return {"evaluations": evaluations}
+    # collect()
+    return evaluations, data["id"]  # Background Tasks? <- cache_clear(), collect()
 
 
-@app.get("/connect_four/{board}")
-async def evaluate_connect_four(
-    board: str = Depends(validate_connect_four_board),
-    alpha_beta_pruning: bool = False,
-    depth_limit: bool = False,
-    depth_limit_value: int = Depends(validate_depth_limit),
-):
+def ws_evaluate_connect_four(data):
+    # start_time = default_timer()
+
+    board = validate_connect_four_board(data['board'])
+    alpha_beta_pruning: bool = data['alpha_beta_pruning']
+    depth_limit: bool = data['depth_limit']
+    depth_limit_value = validate_depth_limit(data['depth_limit'], data['depth_limit_value'])
+
     yellow_tokens, token_mask = interpret_connect_four_board(board)
-
-    start_time = default_timer()
 
     y_count = bin(yellow_tokens).count("1")
     r_count = bin(token_mask).count("1") - y_count
@@ -192,17 +237,9 @@ async def evaluate_connect_four(
             evaluations = [connect_four.minimax(yellow_tokens, token_mask | move, True)
                            for move in connect_four.possible_moves(token_mask)]
 
-        # mem_usage = 0
-        # for move in connect_four.possible_moves(token_mask):
-        #     mem_usage = max(
-        #         mem_usage,
-        #         max(memory_usage((connect_four.minimax,
-        #                           (yellow_tokens | move, token_mask | move, False))))
-        #     )
-        # print(f"Memory usage: {mem_usage:.2f} MB")
-
-        cache_info = connect_four.minimax.cache_info()
+        # cache_info = connect_four.minimax.cache_info()
         connect_four.minimax.cache_clear()
+
     if alpha_beta_pruning and not depth_limit:
         if y_count == r_count:
             evaluations = [connect_four.minimax_alpha_beta(yellow_tokens | move, token_mask | move, False, -inf, inf)
@@ -211,17 +248,9 @@ async def evaluate_connect_four(
             evaluations = [connect_four.minimax_alpha_beta(yellow_tokens, token_mask | move, True, -inf, inf)
                            for move in connect_four.possible_moves(token_mask)]
 
-        # mem_usage = 0
-        # for move in connect_four.possible_moves(token_mask):
-        #     mem_usage = max(
-        #         mem_usage,
-        #         max(memory_usage((connect_four.minimax_alpha_beta,
-        #                           (yellow_tokens | move, token_mask | move, False, -inf, inf))))
-        #     )
-        # print(f"Memory usage: {mem_usage:.2f} MB")
-
-        cache_info = connect_four.minimax_alpha_beta.cache_info()
+        # cache_info = connect_four.minimax_alpha_beta.cache_info()
         connect_four.minimax_alpha_beta.cache_clear()
+
     if not alpha_beta_pruning and depth_limit:
         if y_count == r_count:
             evaluations = [connect_four.depth_limited_minimax(yellow_tokens | move, token_mask | move,
@@ -232,18 +261,9 @@ async def evaluate_connect_four(
                                                               depth_limit_value - 1, True)
                            for move in connect_four.possible_moves(token_mask)]
 
-        # mem_usage = 0
-        # for move in connect_four.possible_moves(token_mask):
-        #     mem_usage = max(
-        #         mem_usage,
-        #         max(memory_usage((connect_four.minimax,
-        #                           (yellow_tokens | move, token_mask | move, depth_limit_value - 1,
-        #                            False))))
-        #     )
-        # print(f"Memory usage: {mem_usage:.2f} MB")
-
-        cache_info = connect_four.depth_limited_minimax.cache_info()
+        # cache_info = connect_four.depth_limited_minimax.cache_info()
         connect_four.depth_limited_minimax.cache_clear()
+
     if alpha_beta_pruning and depth_limit:
         if y_count == r_count:
             evaluations = [connect_four.depth_limited_minimax_alpha_beta(yellow_tokens | move, token_mask | move,
@@ -254,25 +274,15 @@ async def evaluate_connect_four(
                                                                          depth_limit_value - 1, True, -inf, inf)
                            for move in connect_four.possible_moves(token_mask)]
 
-        # mem_usage = 0
-        # for move in connect_four.possible_moves(token_mask):
-        #     mem_usage = max(
-        #         mem_usage,
-        #         max(memory_usage((connect_four.depth_limited_minimax_alpha_beta,
-        #                           (yellow_tokens | move, token_mask | move, depth_limit_value - 1,
-        #                            False, -inf, inf))))
-        #     )
-        # print(f"Memory usage: {mem_usage:.2f} MB")
-
-        cache_info = connect_four.depth_limited_minimax_alpha_beta.cache_info()
+        # cache_info = connect_four.depth_limited_minimax_alpha_beta.cache_info()
         connect_four.depth_limited_minimax_alpha_beta.cache_clear()
 
-    print(f"\nCache: On\nExecution time: {default_timer() - start_time:.7f}")
-    print(f"Evaluations: {evaluations}")
+    # print(f"\nCache: On\nExecution time: {default_timer() - start_time:.7f}")
+    # print(f"Evaluations: {evaluations}")
 
-    print(f"Cache size: {cache_info.currsize}")
-    print(f"Hits: {cache_info.hits}")
-    print(f"Misses: {cache_info.misses}\n")
+    # print(f"Cache size: {cache_info.currsize}")
+    # print(f"Hits: {cache_info.hits}")
+    # print(f"Misses: {cache_info.misses}\n")
 
-    collect()
-    return {"evaluations": evaluations}
+    # collect()
+    return evaluations, data["id"]  # Background Tasks? <- cache_clear(), collect()
