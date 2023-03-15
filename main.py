@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from tic_tac_toe import tic_tac_toe
 from connect_four import connect_four
 from multiprocessing.pool import Pool
-from asyncio import get_event_loop, CancelledError
+from asyncio import get_event_loop, CancelledError, wait_for
 from json import loads
 from math import inf
 
@@ -100,14 +100,19 @@ async def apply_async_task(websocket, func, *args):
 
     try:
         # print("Waiting...")
-        result = await future
-        # print(f"Finished: {result}")
+        result = await wait_for(future, timeout=5)
+        print(f"Finished: {result}")
         await websocket.send_json({'evaluations': result[0], 'id': result[1]})
         # pool.terminate() <- ???
 
     except CancelledError:
         pool.terminate()
         # print("Cancelled!")
+        raise
+
+    except TimeoutError:
+        pool.terminate()
+        # print("Timeout!")
         raise
 
 
@@ -170,7 +175,7 @@ def ws_evaluate_tic_tac_toe(data):
                            for s in tic_tac_toe.successor(board, False)]
 
         # cache_info = tic_tac_toe.minimax.cache_info()
-        tic_tac_toe.minimax.cache_clear()
+        # tic_tac_toe.minimax.cache_clear()
 
     if alpha_beta_pruning and not depth_limit:
         if x_count == o_count:
@@ -181,7 +186,7 @@ def ws_evaluate_tic_tac_toe(data):
                            for s in tic_tac_toe.successor(board, False)]
 
         # cache_info = tic_tac_toe.minimax_alpha_beta.cache_info()
-        tic_tac_toe.minimax_alpha_beta.cache_clear()
+        # tic_tac_toe.minimax_alpha_beta.cache_clear()
 
     if not alpha_beta_pruning and depth_limit:
         if x_count == o_count:
@@ -192,7 +197,7 @@ def ws_evaluate_tic_tac_toe(data):
                            for s in tic_tac_toe.successor(board, False)]
 
         # cache_info = tic_tac_toe.depth_limited_minimax.cache_info()
-        tic_tac_toe.depth_limited_minimax.cache_clear()
+        # tic_tac_toe.depth_limited_minimax.cache_clear()
 
     if alpha_beta_pruning and depth_limit:
         if x_count == o_count:
@@ -203,7 +208,7 @@ def ws_evaluate_tic_tac_toe(data):
                            for s in tic_tac_toe.successor(board, False)]
 
         # cache_info = tic_tac_toe.depth_limited_minimax_alpha_beta.cache_info()
-        tic_tac_toe.depth_limited_minimax_alpha_beta.cache_clear()
+        # tic_tac_toe.depth_limited_minimax_alpha_beta.cache_clear()
 
     # print(f"\nCache: On\nExecution time: {default_timer() - start_time:.7f}")
     # print(f"Evaluations: {evaluations}")
@@ -238,7 +243,7 @@ def ws_evaluate_connect_four(data):
                            for move in connect_four.possible_moves(token_mask)]
 
         # cache_info = connect_four.minimax.cache_info()
-        connect_four.minimax.cache_clear()
+        # connect_four.minimax.cache_clear()
 
     if alpha_beta_pruning and not depth_limit:
         if y_count == r_count:
@@ -249,7 +254,7 @@ def ws_evaluate_connect_four(data):
                            for move in connect_four.possible_moves(token_mask)]
 
         # cache_info = connect_four.minimax_alpha_beta.cache_info()
-        connect_four.minimax_alpha_beta.cache_clear()
+        # connect_four.minimax_alpha_beta.cache_clear()
 
     if not alpha_beta_pruning and depth_limit:
         if y_count == r_count:
@@ -262,7 +267,7 @@ def ws_evaluate_connect_four(data):
                            for move in connect_four.possible_moves(token_mask)]
 
         # cache_info = connect_four.depth_limited_minimax.cache_info()
-        connect_four.depth_limited_minimax.cache_clear()
+        # connect_four.depth_limited_minimax.cache_clear()
 
     if alpha_beta_pruning and depth_limit:
         if y_count == r_count:
@@ -275,7 +280,7 @@ def ws_evaluate_connect_four(data):
                            for move in connect_four.possible_moves(token_mask)]
 
         # cache_info = connect_four.depth_limited_minimax_alpha_beta.cache_info()
-        connect_four.depth_limited_minimax_alpha_beta.cache_clear()
+        # connect_four.depth_limited_minimax_alpha_beta.cache_clear()
 
     # print(f"\nCache: On\nExecution time: {default_timer() - start_time:.7f}")
     # print(f"Evaluations: {evaluations}")
