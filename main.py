@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
+from config import settings
 from tic_tac_toe import tic_tac_toe
 from connect_four import connect_four
 from multiprocessing.pool import Pool
@@ -7,13 +8,14 @@ from asyncio import get_event_loop, CancelledError, wait_for
 from json import loads
 from math import inf
 
-# from timeit import default_timer
-# from gc import collect
+from timeit import default_timer
+
+from asyncio import Event
 
 app = FastAPI()
 
 origins = [
-  "http://localhost:8080",
+  # "http://localhost:8080",  # <-- Remove!
   "https://minimax-algorithm.netlify.app/",
 ]
 
@@ -21,11 +23,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[origins],
     allow_credentials=True,
-    allow_methods=["GET"],
-    allow_headers=["*"],
 )
 
-websocket_connections = 0
+current_websocket_connections = 0
+current_workers = 0
+current_workers_change = Event()
 
 
 def validate_tic_tac_toe_board(board: str):
@@ -88,8 +90,15 @@ def validate_depth_limit(depth_limit: bool = False, depth_limit_value: int = Non
 
 
 async def apply_async_task(websocket, func, *args):
-    pool = Pool(1)
+    global current_workers
 
+    while not current_workers < settings.worker_limit:
+        await websocket.send_json({"status": "waiting"})
+        await current_workers_change.wait()
+        current_workers_change.clear()
+
+    current_workers += 1
+    pool = Pool(1)
     loop = get_event_loop()
     future = loop.create_future()
 
@@ -97,22 +106,29 @@ async def apply_async_task(websocket, func, *args):
         future.set_result(result)
 
     pool.apply_async(func, args, callback=future_set_result)
+    await websocket.send_json({"status": "running"})
 
     try:
-        # print("Waiting...")
-        result = await wait_for(future, timeout=5)
+        result = await wait_for(future, timeout=settings.task_timeout)
+        pool.terminate()
+        current_workers -= 1
+        current_workers_change.set()
+        await websocket.send_json({"status": "complete", "evaluations": result[0], "evaluated_nodes": result[1]})
         print(f"Finished: {result}")
-        await websocket.send_json({'evaluations': result[0], 'id': result[1]})
-        # pool.terminate() <- ???
 
     except CancelledError:
         pool.terminate()
-        # print("Cancelled!")
+        current_workers -= 1
+        current_workers_change.set()
+        print("Cancelled!")
         raise
 
     except TimeoutError:
         pool.terminate()
-        # print("Timeout!")
+        current_workers -= 1
+        current_workers_change.set()
+        await websocket.send_json({"status": "timeout"})
+        print("Timeout!")
         raise
 
 
@@ -121,29 +137,34 @@ async def ws_endpoint(
     websocket: WebSocket,
 ):
     current_task = None
-    global websocket_connections
+    global current_websocket_connections
 
     loop = get_event_loop()
 
+    if not current_websocket_connections < settings.websocket_connection_limit:
+        await websocket.accept()
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     await websocket.accept()
-    websocket_connections += 1
-    # print(f"Number of connections: {websocket_connections}")
+    current_websocket_connections += 1
+    print(f"Number of connections: {current_websocket_connections}")
     try:
         while True:
             message = await websocket.receive_text()
             data = loads(message)
 
-            if data['type'] == 'tic_tac_toe':
+            if data["type"] == "tic_tac_toe":
                 if current_task is not None:
                     current_task.cancel()
-                current_task = loop.create_task(apply_async_task(websocket, ws_evaluate_tic_tac_toe, data))
+                current_task = loop.create_task(apply_async_task(websocket, evaluate_tic_tac_toe, data))
 
-            elif data['type'] == 'connect_four':
+            elif data["type"] == "connect_four":
                 if current_task is not None:
                     current_task.cancel()
-                current_task = loop.create_task(apply_async_task(websocket, ws_evaluate_connect_four, data))
+                current_task = loop.create_task(apply_async_task(websocket, evaluate_connect_four, data))
 
-            elif data['type'] == 'cancel_task':
+            elif data["type"] == "cancel_task":
                 if current_task is not None:
                     current_task.cancel()
                     current_task = None
@@ -151,143 +172,185 @@ async def ws_endpoint(
     except WebSocketDisconnect:
         if current_task is not None:
             current_task.cancel()
-        websocket_connections -= 1
-        # print(f"Number of connections: {websocket_connections}")
+        current_websocket_connections -= 1
+        print(f"Number of connections: {current_websocket_connections}")
 
 
-def ws_evaluate_tic_tac_toe(data):
-    # start_time = default_timer()
+def evaluate_tic_tac_toe(data):
+    start_time = default_timer()
 
-    board = validate_tic_tac_toe_board(data['board'])
-    alpha_beta_pruning: bool = data['alpha_beta_pruning']
-    depth_limit: bool = data['depth_limit']
-    depth_limit_value = validate_depth_limit(data['depth_limit'], data['depth_limit_value'])
+    board = validate_tic_tac_toe_board(data["board"])
+    alpha_beta_pruning: bool = data["alpha_beta_pruning"]
+    depth_limit: bool = data["depth_limit"]
+    depth_limit_value = validate_depth_limit(data["depth_limit"], data["depth_limit_value"])
 
     x_count = board.count('x')
     o_count = board.count('o')
 
+    evaluations = []
+    evaluated_nodes = 0
+
     if not alpha_beta_pruning and not depth_limit:
         if x_count == o_count:
-            evaluations = [tic_tac_toe.minimax(s, False)
-                           for s in tic_tac_toe.successor(board, True)]
+            for s in tic_tac_toe.successor(board, True):
+                res_eval, res_nodes = tic_tac_toe.minimax(s, False)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
         else:
-            evaluations = [tic_tac_toe.minimax(s, True)
-                           for s in tic_tac_toe.successor(board, False)]
+            for s in tic_tac_toe.successor(board, False):
+                res_eval, res_nodes = tic_tac_toe.minimax(s, True)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
 
         # cache_info = tic_tac_toe.minimax.cache_info()
         # tic_tac_toe.minimax.cache_clear()
 
     if alpha_beta_pruning and not depth_limit:
         if x_count == o_count:
-            evaluations = [tic_tac_toe.minimax_alpha_beta(s, False, -inf, inf)
-                           for s in tic_tac_toe.successor(board, True)]
+            for s in tic_tac_toe.successor(board, True):
+                res_eval, res_nodes = tic_tac_toe.minimax_alpha_beta(s, False, -inf, inf)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
         else:
-            evaluations = [tic_tac_toe.minimax_alpha_beta(s, True, -inf, inf)
-                           for s in tic_tac_toe.successor(board, False)]
+            for s in tic_tac_toe.successor(board, False):
+                res_eval, res_nodes = tic_tac_toe.minimax_alpha_beta(s, True, -inf, inf)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
 
         # cache_info = tic_tac_toe.minimax_alpha_beta.cache_info()
         # tic_tac_toe.minimax_alpha_beta.cache_clear()
 
     if not alpha_beta_pruning and depth_limit:
         if x_count == o_count:
-            evaluations = [tic_tac_toe.depth_limited_minimax(s, depth_limit_value - 1, False)
-                           for s in tic_tac_toe.successor(board, True)]
+            for s in tic_tac_toe.successor(board, True):
+                res_eval, res_nodes = tic_tac_toe.depth_limited_minimax(s, depth_limit_value - 1, False)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
         else:
-            evaluations = [tic_tac_toe.depth_limited_minimax(s, depth_limit_value - 1, True)
-                           for s in tic_tac_toe.successor(board, False)]
+            for s in tic_tac_toe.successor(board, False):
+                res_eval, res_nodes = tic_tac_toe.depth_limited_minimax(s, depth_limit_value - 1, True)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
 
         # cache_info = tic_tac_toe.depth_limited_minimax.cache_info()
         # tic_tac_toe.depth_limited_minimax.cache_clear()
 
     if alpha_beta_pruning and depth_limit:
         if x_count == o_count:
-            evaluations = [tic_tac_toe.depth_limited_minimax_alpha_beta(s, depth_limit_value - 1, False, -inf, inf)
-                           for s in tic_tac_toe.successor(board, True)]
+            for s in tic_tac_toe.successor(board, True):
+                res_eval, res_nodes = tic_tac_toe.depth_limited_minimax_alpha_beta(s, depth_limit_value - 1, False,
+                                                                                   -inf, inf)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
         else:
-            evaluations = [tic_tac_toe.depth_limited_minimax_alpha_beta(s, depth_limit_value - 1, True, -inf, inf)
-                           for s in tic_tac_toe.successor(board, False)]
+            for s in tic_tac_toe.successor(board, False):
+                res_eval, res_nodes = tic_tac_toe.depth_limited_minimax_alpha_beta(s, depth_limit_value - 1, True,
+                                                                                   -inf, inf)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
 
         # cache_info = tic_tac_toe.depth_limited_minimax_alpha_beta.cache_info()
         # tic_tac_toe.depth_limited_minimax_alpha_beta.cache_clear()
 
-    # print(f"\nCache: On\nExecution time: {default_timer() - start_time:.7f}")
-    # print(f"Evaluations: {evaluations}")
+    print(f"\nExecution time: {default_timer() - start_time:.7f}")
 
     # print(f"Cache size: {cache_info.currsize}")
     # print(f"Hits: {cache_info.hits}")
     # print(f"Misses: {cache_info.misses}\n")
 
-    # collect()
-    return evaluations, data["id"]  # Background Tasks? <- cache_clear(), collect()
+    return evaluations, evaluated_nodes
 
 
-def ws_evaluate_connect_four(data):
-    # start_time = default_timer()
+def evaluate_connect_four(data):
+    start_time = default_timer()
 
-    board = validate_connect_four_board(data['board'])
-    alpha_beta_pruning: bool = data['alpha_beta_pruning']
-    depth_limit: bool = data['depth_limit']
-    depth_limit_value = validate_depth_limit(data['depth_limit'], data['depth_limit_value'])
+    board = validate_connect_four_board(data["board"])
+    alpha_beta_pruning: bool = data["alpha_beta_pruning"]
+    depth_limit: bool = data["depth_limit"]
+    depth_limit_value = validate_depth_limit(data["depth_limit"], data["depth_limit_value"])
 
     yellow_tokens, token_mask = interpret_connect_four_board(board)
 
     y_count = bin(yellow_tokens).count("1")
     r_count = bin(token_mask).count("1") - y_count
 
+    evaluations = []
+    evaluated_nodes = 0
+
     if not alpha_beta_pruning and not depth_limit:
         if y_count == r_count:
-            evaluations = [connect_four.minimax(yellow_tokens | move, token_mask | move, False)
-                           for move in connect_four.possible_moves(token_mask)]
+            for move in connect_four.possible_moves(token_mask):
+                res_eval, res_nodes = connect_four.minimax(yellow_tokens | move, token_mask | move, False)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
         else:
-            evaluations = [connect_four.minimax(yellow_tokens, token_mask | move, True)
-                           for move in connect_four.possible_moves(token_mask)]
+            for move in connect_four.possible_moves(token_mask):
+                res_eval, res_nodes = connect_four.minimax(yellow_tokens, token_mask | move, True)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
 
         # cache_info = connect_four.minimax.cache_info()
         # connect_four.minimax.cache_clear()
 
     if alpha_beta_pruning and not depth_limit:
         if y_count == r_count:
-            evaluations = [connect_four.minimax_alpha_beta(yellow_tokens | move, token_mask | move, False, -inf, inf)
-                           for move in connect_four.possible_moves(token_mask)]
+            for move in connect_four.possible_moves(token_mask):
+                res_eval, res_nodes = connect_four.minimax_alpha_beta(yellow_tokens | move, token_mask | move, False,
+                                                                      -inf, inf)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
         else:
-            evaluations = [connect_four.minimax_alpha_beta(yellow_tokens, token_mask | move, True, -inf, inf)
-                           for move in connect_four.possible_moves(token_mask)]
+            for move in connect_four.possible_moves(token_mask):
+                res_eval, res_nodes = connect_four.minimax_alpha_beta(yellow_tokens, token_mask | move, True,
+                                                                      -inf, inf)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
 
         # cache_info = connect_four.minimax_alpha_beta.cache_info()
         # connect_four.minimax_alpha_beta.cache_clear()
 
     if not alpha_beta_pruning and depth_limit:
         if y_count == r_count:
-            evaluations = [connect_four.depth_limited_minimax(yellow_tokens | move, token_mask | move,
-                                                              depth_limit_value - 1, False)
-                           for move in connect_four.possible_moves(token_mask)]
+            for move in connect_four.possible_moves(token_mask):
+                res_eval, res_nodes = connect_four.depth_limited_minimax(yellow_tokens | move, token_mask | move,
+                                                                         depth_limit_value - 1, False)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
         else:
-            evaluations = [connect_four.depth_limited_minimax(yellow_tokens, token_mask | move,
-                                                              depth_limit_value - 1, True)
-                           for move in connect_four.possible_moves(token_mask)]
+            for move in connect_four.possible_moves(token_mask):
+                res_eval, res_nodes = connect_four.depth_limited_minimax(yellow_tokens, token_mask | move,
+                                                                         depth_limit_value - 1, True)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
 
         # cache_info = connect_four.depth_limited_minimax.cache_info()
         # connect_four.depth_limited_minimax.cache_clear()
 
     if alpha_beta_pruning and depth_limit:
         if y_count == r_count:
-            evaluations = [connect_four.depth_limited_minimax_alpha_beta(yellow_tokens | move, token_mask | move,
-                                                                         depth_limit_value - 1, False, -inf, inf)
-                           for move in connect_four.possible_moves(token_mask)]
+            for move in connect_four.possible_moves(token_mask):
+                res_eval, res_nodes = connect_four.depth_limited_minimax_alpha_beta(yellow_tokens | move,
+                                                                                    token_mask | move,
+                                                                                    depth_limit_value - 1, False, -inf,
+                                                                                    inf)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
         else:
-            evaluations = [connect_four.depth_limited_minimax_alpha_beta(yellow_tokens, token_mask | move,
-                                                                         depth_limit_value - 1, True, -inf, inf)
-                           for move in connect_four.possible_moves(token_mask)]
+            for move in connect_four.possible_moves(token_mask):
+                res_eval, res_nodes = connect_four.depth_limited_minimax_alpha_beta(yellow_tokens,
+                                                                                    token_mask | move,
+                                                                                    depth_limit_value - 1, True, -inf,
+                                                                                    inf)
+                evaluations.append(res_eval)
+                evaluated_nodes += res_nodes
 
         # cache_info = connect_four.depth_limited_minimax_alpha_beta.cache_info()
         # connect_four.depth_limited_minimax_alpha_beta.cache_clear()
 
-    # print(f"\nCache: On\nExecution time: {default_timer() - start_time:.7f}")
-    # print(f"Evaluations: {evaluations}")
+    print(f"\nExecution time: {default_timer() - start_time:.7f}")
 
     # print(f"Cache size: {cache_info.currsize}")
     # print(f"Hits: {cache_info.hits}")
     # print(f"Misses: {cache_info.misses}\n")
 
-    # collect()
-    return evaluations, data["id"]  # Background Tasks? <- cache_clear(), collect()
+    return evaluations, evaluated_nodes
