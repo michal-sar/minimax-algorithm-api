@@ -74,7 +74,7 @@ def minimax_alpha_beta(yellow_tokens: int, token_mask: int, maximizer_turn: bool
 def depth_limited_minimax(yellow_tokens: int, token_mask: int, d: int, maximizer_turn: bool):
     if maximizer_turn:
         red_tokens = ~yellow_tokens & token_mask
-        is_final_state, h = heuristic(red_tokens, token_mask)
+        is_final_state, h = heuristic(red_tokens, token_mask, d)
         if d == 0 or is_final_state:
             return -h, 1
         v = -inf
@@ -87,7 +87,7 @@ def depth_limited_minimax(yellow_tokens: int, token_mask: int, d: int, maximizer
             v = max(v, res_eval)
         return v, evaluated_nodes
     else:
-        is_final_state, h = heuristic(yellow_tokens, token_mask)
+        is_final_state, h = heuristic(yellow_tokens, token_mask, d)
         if d == 0 or is_final_state:
             return h, 1
         v = inf
@@ -107,7 +107,7 @@ def depth_limited_minimax_alpha_beta(yellow_tokens: int, token_mask: int, d: int
                                      maximizer_turn: bool, alpha: int, beta: int):
     if maximizer_turn:
         red_tokens = ~yellow_tokens & token_mask
-        is_final_state, h = heuristic(red_tokens, token_mask)
+        is_final_state, h = heuristic(red_tokens, token_mask, d)
         if d == 0 or is_final_state:
             return -h, 1
         evaluated_nodes = 0
@@ -122,7 +122,7 @@ def depth_limited_minimax_alpha_beta(yellow_tokens: int, token_mask: int, d: int
                 return alpha, evaluated_nodes
         return alpha, evaluated_nodes
     else:
-        is_final_state, h = heuristic(yellow_tokens, token_mask)
+        is_final_state, h = heuristic(yellow_tokens, token_mask, d)
         if d == 0 or is_final_state:
             return h, 1
         evaluated_nodes = 0
@@ -137,7 +137,7 @@ def depth_limited_minimax_alpha_beta(yellow_tokens: int, token_mask: int, d: int
         return beta, evaluated_nodes
 
 
-def heuristic(tokens: int, token_mask: int):
+def heuristic(tokens: int, token_mask: int, d: int):
     pattern_mask = tokens & (tokens >> 6)
     if pattern_mask & (pattern_mask >> 12):
         return True, 1
@@ -155,8 +155,66 @@ def heuristic(tokens: int, token_mask: int):
         pattern_mask &= token_mask >> index * 7 + 5
     if pattern_mask == 1:
         return True, 0
-    # add heuristics here:
-    return False, 0
+    if d != 0:
+        return False, 0
+    h = 0
+    pattern_mask = (tokens | (tokens >> 1)) & 137412980756383
+    pattern_mask &= (pattern_mask >> 2)
+    h += bin(pattern_mask).count('1')
+    pattern_mask = (tokens | (tokens >> 7)) & 2181708111807
+    pattern_mask &= (pattern_mask >> 14)
+    h += bin(pattern_mask).count('1')
+    pattern_mask = (tokens | (tokens >> 8)) & 1073538912159
+    pattern_mask &= (pattern_mask >> 16)
+    h += bin(pattern_mask).count('1')
+    pattern_mask = (tokens | (tokens >> 6)) & 2147077824318
+    pattern_mask &= (pattern_mask >> 12)
+    h += bin(pattern_mask).count('1')
+    pattern_mask = tokens & (tokens >> 1)
+    pattern_mask |= (pattern_mask >> 2)
+    pattern_mask &= 31028737590151
+    h += bin(pattern_mask).count('1')
+    pattern_mask = tokens & (tokens >> 7)
+    pattern_mask |= (pattern_mask >> 14)
+    pattern_mask &= 133160895
+    h += bin(pattern_mask).count('1')
+    pattern_mask = tokens & (tokens >> 8)
+    pattern_mask |= (pattern_mask >> 16)
+    pattern_mask &= 14795655
+    h += bin(pattern_mask).count('1')
+    pattern_mask = tokens & (tokens >> 6)
+    pattern_mask |= (pattern_mask >> 12)
+    pattern_mask &= 118365240
+    h += bin(pattern_mask).count('1')
+    tokens = ~tokens & token_mask
+    pattern_mask = (tokens | (tokens >> 1)) & 137412980756383
+    pattern_mask &= (pattern_mask >> 2)
+    h -= bin(pattern_mask).count('1')
+    pattern_mask = (tokens | (tokens >> 7)) & 2181708111807
+    pattern_mask &= (pattern_mask >> 14)
+    h -= bin(pattern_mask).count('1')
+    pattern_mask = (tokens | (tokens >> 8)) & 1073538912159
+    pattern_mask &= (pattern_mask >> 16)
+    h -= bin(pattern_mask).count('1')
+    pattern_mask = (tokens | (tokens >> 6)) & 2147077824318
+    pattern_mask &= (pattern_mask >> 12)
+    h -= bin(pattern_mask).count('1')
+    pattern_mask = tokens & (tokens >> 1)
+    pattern_mask |= (pattern_mask >> 2)
+    pattern_mask &= 31028737590151
+    h -= bin(pattern_mask).count('1')
+    pattern_mask = tokens & (tokens >> 7)
+    pattern_mask |= (pattern_mask >> 14)
+    pattern_mask &= 133160895
+    h -= bin(pattern_mask).count('1')
+    pattern_mask = tokens & (tokens >> 8)
+    pattern_mask |= (pattern_mask >> 16)
+    pattern_mask &= 14795655
+    h -= bin(pattern_mask).count('1')
+    pattern_mask = tokens & (tokens >> 6)
+    pattern_mask |= (pattern_mask >> 12)
+    pattern_mask &= 118365240
+    h -= bin(pattern_mask).count('1')
 
 
 def utility(tokens: int, token_mask: int):

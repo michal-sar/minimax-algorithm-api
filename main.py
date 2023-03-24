@@ -1,21 +1,18 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
+from asyncio import Event, get_event_loop, wait_for, CancelledError
+from multiprocessing.pool import Pool
+from json import loads
+from math import inf
+from timeit import default_timer
 from config import settings
 from tic_tac_toe import tic_tac_toe
 from connect_four import connect_four
-from multiprocessing.pool import Pool
-from asyncio import get_event_loop, CancelledError, wait_for
-from json import loads
-from math import inf
 
-from timeit import default_timer
-
-from asyncio import Event
 
 app = FastAPI()
 
 origins = [
-  # "http://localhost:8080",  # <-- Remove!
   "https://minimax-algorithm.netlify.app/",
 ]
 
@@ -194,69 +191,53 @@ def evaluate_tic_tac_toe(data):
         if x_count == o_count:
             for s in tic_tac_toe.successor(board, True):
                 res_eval, res_nodes = tic_tac_toe.minimax(s, False)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
         else:
             for s in tic_tac_toe.successor(board, False):
                 res_eval, res_nodes = tic_tac_toe.minimax(s, True)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
-
-        # cache_info = tic_tac_toe.minimax.cache_info()
-        # tic_tac_toe.minimax.cache_clear()
 
     if alpha_beta_pruning and not depth_limit:
         if x_count == o_count:
             for s in tic_tac_toe.successor(board, True):
                 res_eval, res_nodes = tic_tac_toe.minimax_alpha_beta(s, False, -inf, inf)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
         else:
             for s in tic_tac_toe.successor(board, False):
                 res_eval, res_nodes = tic_tac_toe.minimax_alpha_beta(s, True, -inf, inf)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
-
-        # cache_info = tic_tac_toe.minimax_alpha_beta.cache_info()
-        # tic_tac_toe.minimax_alpha_beta.cache_clear()
 
     if not alpha_beta_pruning and depth_limit:
         if x_count == o_count:
             for s in tic_tac_toe.successor(board, True):
                 res_eval, res_nodes = tic_tac_toe.depth_limited_minimax(s, depth_limit_value - 1, False)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
         else:
             for s in tic_tac_toe.successor(board, False):
                 res_eval, res_nodes = tic_tac_toe.depth_limited_minimax(s, depth_limit_value - 1, True)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
-
-        # cache_info = tic_tac_toe.depth_limited_minimax.cache_info()
-        # tic_tac_toe.depth_limited_minimax.cache_clear()
 
     if alpha_beta_pruning and depth_limit:
         if x_count == o_count:
             for s in tic_tac_toe.successor(board, True):
                 res_eval, res_nodes = tic_tac_toe.depth_limited_minimax_alpha_beta(s, depth_limit_value - 1, False,
                                                                                    -inf, inf)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
         else:
             for s in tic_tac_toe.successor(board, False):
                 res_eval, res_nodes = tic_tac_toe.depth_limited_minimax_alpha_beta(s, depth_limit_value - 1, True,
                                                                                    -inf, inf)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
 
-        # cache_info = tic_tac_toe.depth_limited_minimax_alpha_beta.cache_info()
-        # tic_tac_toe.depth_limited_minimax_alpha_beta.cache_clear()
-
     print(f"\nExecution time: {default_timer() - start_time:.7f}")
-
-    # print(f"Cache size: {cache_info.currsize}")
-    # print(f"Hits: {cache_info.hits}")
-    # print(f"Misses: {cache_info.misses}\n")
 
     return evaluations, evaluated_nodes
 
@@ -281,50 +262,41 @@ def evaluate_connect_four(data):
         if y_count == r_count:
             for move in connect_four.possible_moves(token_mask):
                 res_eval, res_nodes = connect_four.minimax(yellow_tokens | move, token_mask | move, False)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
         else:
             for move in connect_four.possible_moves(token_mask):
                 res_eval, res_nodes = connect_four.minimax(yellow_tokens, token_mask | move, True)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
-
-        # cache_info = connect_four.minimax.cache_info()
-        # connect_four.minimax.cache_clear()
 
     if alpha_beta_pruning and not depth_limit:
         if y_count == r_count:
             for move in connect_four.possible_moves(token_mask):
                 res_eval, res_nodes = connect_four.minimax_alpha_beta(yellow_tokens | move, token_mask | move, False,
                                                                       -inf, inf)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
         else:
             for move in connect_four.possible_moves(token_mask):
                 res_eval, res_nodes = connect_four.minimax_alpha_beta(yellow_tokens, token_mask | move, True,
                                                                       -inf, inf)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
-
-        # cache_info = connect_four.minimax_alpha_beta.cache_info()
-        # connect_four.minimax_alpha_beta.cache_clear()
 
     if not alpha_beta_pruning and depth_limit:
         if y_count == r_count:
             for move in connect_four.possible_moves(token_mask):
                 res_eval, res_nodes = connect_four.depth_limited_minimax(yellow_tokens | move, token_mask | move,
                                                                          depth_limit_value - 1, False)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
         else:
             for move in connect_four.possible_moves(token_mask):
                 res_eval, res_nodes = connect_four.depth_limited_minimax(yellow_tokens, token_mask | move,
                                                                          depth_limit_value - 1, True)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
-
-        # cache_info = connect_four.depth_limited_minimax.cache_info()
-        # connect_four.depth_limited_minimax.cache_clear()
 
     if alpha_beta_pruning and depth_limit:
         if y_count == r_count:
@@ -333,7 +305,7 @@ def evaluate_connect_four(data):
                                                                                     token_mask | move,
                                                                                     depth_limit_value - 1, False, -inf,
                                                                                     inf)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
         else:
             for move in connect_four.possible_moves(token_mask):
@@ -341,16 +313,9 @@ def evaluate_connect_four(data):
                                                                                     token_mask | move,
                                                                                     depth_limit_value - 1, True, -inf,
                                                                                     inf)
-                evaluations.append(res_eval)
+                evaluations.append(float("{:.2f}".format(res_eval)))
                 evaluated_nodes += res_nodes
 
-        # cache_info = connect_four.depth_limited_minimax_alpha_beta.cache_info()
-        # connect_four.depth_limited_minimax_alpha_beta.cache_clear()
-
     print(f"\nExecution time: {default_timer() - start_time:.7f}")
-
-    # print(f"Cache size: {cache_info.currsize}")
-    # print(f"Hits: {cache_info.hits}")
-    # print(f"Misses: {cache_info.misses}\n")
 
     return evaluations, evaluated_nodes

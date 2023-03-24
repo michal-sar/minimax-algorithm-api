@@ -144,8 +144,29 @@ def heuristic(n: tuple):
         return -1
     if not n.count('_'):
         return 0
-    # add heuristics here:
-    return 0
+    winning_patterns = [
+        [n[0], n[1], n[2]],
+        [n[3], n[4], n[5]],
+        [n[6], n[7], n[8]],
+        [n[0], n[3], n[6]],
+        [n[1], n[4], n[7]],
+        [n[2], n[5], n[8]],
+        [n[0], n[4], n[8]],
+        [n[2], n[4], n[6]],
+                        ]
+    h = 0
+    for pattern in winning_patterns:
+        if (pattern[0] == 'x'
+            and pattern[0] == pattern[1]) or (pattern[0] == 'x'
+                                              and pattern[0] == pattern[2]) or (pattern[1] == 'x'
+                                                                                and pattern[1] == pattern[2]):
+            h += 0.15
+        if (pattern[0] == 'o'
+            and pattern[0] == pattern[1]) or (pattern[0] == 'o'
+                                              and pattern[0] == pattern[2]) or (pattern[1] == 'o'
+                                                                                and pattern[1] == pattern[2]):
+            h -= 0.15
+    return h
 
 
 def utility(n: tuple):
