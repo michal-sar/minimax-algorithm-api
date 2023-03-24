@@ -215,6 +215,7 @@ def heuristic(tokens: int, token_mask: int, d: int):
     pattern_mask |= (pattern_mask >> 12)
     pattern_mask &= 118365240
     h -= bin(pattern_mask).count('1')
+    return False, h * 0.01
 
 
 def utility(tokens: int, token_mask: int):
