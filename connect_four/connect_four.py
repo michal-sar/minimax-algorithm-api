@@ -19,7 +19,7 @@ def minimax(yellow_tokens: int, token_mask: int, maximizer_turn: bool):
             res_eval, res_nodes = minimax(successor_yellow_tokens, successor_mask, False)
             evaluated_nodes += res_nodes
             v = max(v, res_eval)
-        return v, evaluated_nodes
+        return v, evaluated_nodes + 1
     else:
         is_final_state, u = utility(yellow_tokens, token_mask)
         if is_final_state:
@@ -31,7 +31,7 @@ def minimax(yellow_tokens: int, token_mask: int, maximizer_turn: bool):
             res_eval, res_nodes = minimax(yellow_tokens, successor_mask, True)
             evaluated_nodes += res_nodes
             v = min(v, res_eval)
-        return v, evaluated_nodes
+        return v, evaluated_nodes + 1
 
 
 # minimax_alpha_beta
@@ -51,8 +51,8 @@ def minimax_alpha_beta(yellow_tokens: int, token_mask: int, maximizer_turn: bool
             evaluated_nodes += res_nodes
             alpha = max(alpha, res_eval)
             if alpha >= beta:
-                return alpha, evaluated_nodes
-        return alpha, evaluated_nodes
+                return alpha, evaluated_nodes + 1
+        return alpha, evaluated_nodes + 1
     else:
         is_final_state, u = utility(yellow_tokens, token_mask)
         if is_final_state:
@@ -64,8 +64,8 @@ def minimax_alpha_beta(yellow_tokens: int, token_mask: int, maximizer_turn: bool
             evaluated_nodes += res_nodes
             beta = min(beta, res_eval)
             if alpha >= beta:
-                return beta, evaluated_nodes
-        return beta, evaluated_nodes
+                return beta, evaluated_nodes + 1
+        return beta, evaluated_nodes + 1
 
 
 # depth_limited_minimax
@@ -85,7 +85,7 @@ def depth_limited_minimax(yellow_tokens: int, token_mask: int, d: int, maximizer
             res_eval, res_nodes = depth_limited_minimax(successor_yellow_tokens, successor_mask, d - 1, False)
             evaluated_nodes += res_nodes
             v = max(v, res_eval)
-        return v, evaluated_nodes
+        return v, evaluated_nodes + 1
     else:
         is_final_state, h = heuristic(yellow_tokens, token_mask, d)
         if d == 0 or is_final_state:
@@ -97,7 +97,7 @@ def depth_limited_minimax(yellow_tokens: int, token_mask: int, d: int, maximizer
             res_eval, res_nodes = depth_limited_minimax(yellow_tokens, successor_mask, d - 1, True)
             evaluated_nodes += res_nodes
             v = min(v, res_eval)
-        return v, evaluated_nodes
+        return v, evaluated_nodes + 1
 
 
 # depth_limited_minimax_alpha_beta
@@ -119,8 +119,8 @@ def depth_limited_minimax_alpha_beta(yellow_tokens: int, token_mask: int, d: int
             evaluated_nodes += res_nodes
             alpha = max(alpha, res_eval)
             if alpha >= beta:
-                return alpha, evaluated_nodes
-        return alpha, evaluated_nodes
+                return alpha, evaluated_nodes + 1
+        return alpha, evaluated_nodes + 1
     else:
         is_final_state, h = heuristic(yellow_tokens, token_mask, d)
         if d == 0 or is_final_state:
@@ -133,8 +133,8 @@ def depth_limited_minimax_alpha_beta(yellow_tokens: int, token_mask: int, d: int
             evaluated_nodes += res_nodes
             beta = min(beta, res_eval)
             if alpha >= beta:
-                return beta, evaluated_nodes
-        return beta, evaluated_nodes
+                return beta, evaluated_nodes + 1
+        return beta, evaluated_nodes + 1
 
 
 def heuristic(tokens: int, token_mask: int, d: int):
@@ -158,64 +158,98 @@ def heuristic(tokens: int, token_mask: int, d: int):
     if d != 0:
         return False, 0
     h = 0
+    not_tokens = ~tokens
+    opponent_tokens = ~tokens & token_mask
+    not_opponent_tokens = ~opponent_tokens
+    buffer = not_opponent_tokens & (not_opponent_tokens >> 1)
+    buffer_vertical = buffer & (buffer >> 2)
+    buffer = not_opponent_tokens & (not_opponent_tokens >> 7)
+    buffer_horizontal = buffer & (buffer >> 14)
+    buffer = not_opponent_tokens & (not_opponent_tokens >> 8)
+    buffer_diagonal1 = buffer & (buffer >> 16)
+    buffer = not_opponent_tokens & (not_opponent_tokens >> 6)
+    buffer_diagonal2 = buffer & (buffer >> 12)
+    buffer = not_tokens & (not_tokens >> 1)
+    opponent_buffer_vertical = buffer & (buffer >> 2)
+    buffer = not_tokens & (not_tokens >> 7)
+    opponent_buffer_horizontal = buffer & (buffer >> 14)
+    buffer = not_tokens & (not_tokens >> 8)
+    opponent_buffer_diagonal1 = buffer & (buffer >> 16)
+    buffer = not_tokens & (not_tokens >> 6)
+    opponent_buffer_diagonal2 = buffer & (buffer >> 12)
     pattern_mask = (tokens | (tokens >> 1)) & 137412980756383
     pattern_mask &= (pattern_mask >> 2)
-    h += bin(pattern_mask).count('1')
-    pattern_mask = (tokens | (tokens >> 7)) & 2181708111807
-    pattern_mask &= (pattern_mask >> 14)
-    h += bin(pattern_mask).count('1')
-    pattern_mask = (tokens | (tokens >> 8)) & 1073538912159
-    pattern_mask &= (pattern_mask >> 16)
-    h += bin(pattern_mask).count('1')
-    pattern_mask = (tokens | (tokens >> 6)) & 2147077824318
-    pattern_mask &= (pattern_mask >> 12)
+    pattern_mask &= buffer_vertical
     h += bin(pattern_mask).count('1')
     pattern_mask = tokens & (tokens >> 1)
     pattern_mask |= (pattern_mask >> 2)
     pattern_mask &= 31028737590151
+    pattern_mask &= buffer_vertical
     h += bin(pattern_mask).count('1')
-    pattern_mask = tokens & (tokens >> 7)
-    pattern_mask |= (pattern_mask >> 14)
-    pattern_mask &= 133160895
-    h += bin(pattern_mask).count('1')
-    pattern_mask = tokens & (tokens >> 8)
-    pattern_mask |= (pattern_mask >> 16)
-    pattern_mask &= 14795655
-    h += bin(pattern_mask).count('1')
-    pattern_mask = tokens & (tokens >> 6)
-    pattern_mask |= (pattern_mask >> 12)
-    pattern_mask &= 118365240
-    h += bin(pattern_mask).count('1')
-    tokens = ~tokens & token_mask
-    pattern_mask = (tokens | (tokens >> 1)) & 137412980756383
-    pattern_mask &= (pattern_mask >> 2)
-    h -= bin(pattern_mask).count('1')
     pattern_mask = (tokens | (tokens >> 7)) & 2181708111807
     pattern_mask &= (pattern_mask >> 14)
-    h -= bin(pattern_mask).count('1')
-    pattern_mask = (tokens | (tokens >> 8)) & 1073538912159
-    pattern_mask &= (pattern_mask >> 16)
-    h -= bin(pattern_mask).count('1')
-    pattern_mask = (tokens | (tokens >> 6)) & 2147077824318
-    pattern_mask &= (pattern_mask >> 12)
-    h -= bin(pattern_mask).count('1')
-    pattern_mask = tokens & (tokens >> 1)
-    pattern_mask |= (pattern_mask >> 2)
-    pattern_mask &= 31028737590151
-    h -= bin(pattern_mask).count('1')
+    pattern_mask &= buffer_horizontal
+    h += bin(pattern_mask).count('1')
     pattern_mask = tokens & (tokens >> 7)
     pattern_mask |= (pattern_mask >> 14)
     pattern_mask &= 133160895
-    h -= bin(pattern_mask).count('1')
+    pattern_mask &= buffer_horizontal
+    h += bin(pattern_mask).count('1')
+    pattern_mask = (tokens | (tokens >> 8)) & 1073538912159
+    pattern_mask &= (pattern_mask >> 16)
+    pattern_mask &= buffer_diagonal1
+    h += bin(pattern_mask).count('1')
     pattern_mask = tokens & (tokens >> 8)
     pattern_mask |= (pattern_mask >> 16)
     pattern_mask &= 14795655
-    h -= bin(pattern_mask).count('1')
+    pattern_mask &= buffer_diagonal1
+    h += bin(pattern_mask).count('1')
+    pattern_mask = (tokens | (tokens >> 6)) & 2147077824318
+    pattern_mask &= (pattern_mask >> 12)
+    pattern_mask &= buffer_diagonal2
+    h += bin(pattern_mask).count('1')
     pattern_mask = tokens & (tokens >> 6)
     pattern_mask |= (pattern_mask >> 12)
     pattern_mask &= 118365240
+    pattern_mask &= buffer_diagonal2
+    h += bin(pattern_mask).count('1')
+    pattern_mask = (opponent_tokens | (opponent_tokens >> 1)) & 137412980756383
+    pattern_mask &= (pattern_mask >> 2)
+    pattern_mask &= opponent_buffer_vertical
     h -= bin(pattern_mask).count('1')
-    return False, h * 0.01
+    pattern_mask = opponent_tokens & (opponent_tokens >> 1)
+    pattern_mask |= (pattern_mask >> 2)
+    pattern_mask &= 31028737590151
+    pattern_mask &= opponent_buffer_vertical
+    h -= bin(pattern_mask).count('1')
+    pattern_mask = (opponent_tokens | (opponent_tokens >> 7)) & 2181708111807
+    pattern_mask &= (pattern_mask >> 14)
+    pattern_mask &= opponent_buffer_horizontal
+    h -= bin(pattern_mask).count('1')
+    pattern_mask = opponent_tokens & (opponent_tokens >> 7)
+    pattern_mask |= (pattern_mask >> 14)
+    pattern_mask &= 133160895
+    pattern_mask &= opponent_buffer_horizontal
+    h -= bin(pattern_mask).count('1')
+    pattern_mask = (opponent_tokens | (opponent_tokens >> 8)) & 1073538912159
+    pattern_mask &= (pattern_mask >> 16)
+    pattern_mask &= opponent_buffer_diagonal1
+    h -= bin(pattern_mask).count('1')
+    pattern_mask = opponent_tokens & (opponent_tokens >> 8)
+    pattern_mask |= (pattern_mask >> 16)
+    pattern_mask &= 14795655
+    pattern_mask &= opponent_buffer_diagonal1
+    h -= bin(pattern_mask).count('1')
+    pattern_mask = (opponent_tokens | (opponent_tokens >> 6)) & 2147077824318
+    pattern_mask &= (pattern_mask >> 12)
+    pattern_mask &= opponent_buffer_diagonal2
+    h -= bin(pattern_mask).count('1')
+    pattern_mask = opponent_tokens & (opponent_tokens >> 6)
+    pattern_mask |= (pattern_mask >> 12)
+    pattern_mask &= 118365240
+    pattern_mask &= opponent_buffer_diagonal2
+    h -= bin(pattern_mask).count('1')
+    return False, h * 0.02
 
 
 def utility(tokens: int, token_mask: int):

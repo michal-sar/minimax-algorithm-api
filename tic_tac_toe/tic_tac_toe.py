@@ -15,7 +15,7 @@ def minimax(n: tuple, maximizer_turn: bool):
             res_eval, res_nodes = minimax(s, False)
             evaluated_nodes += res_nodes
             v = max(v, res_eval)
-        return v, evaluated_nodes
+        return v, evaluated_nodes + 1
     else:
         v = inf
         evaluated_nodes = 0
@@ -23,7 +23,7 @@ def minimax(n: tuple, maximizer_turn: bool):
             res_eval, res_nodes = minimax(s, True)
             evaluated_nodes += res_nodes
             v = min(v, res_eval)
-        return v, evaluated_nodes
+        return v, evaluated_nodes + 1
 
 
 # minimax_alpha_beta
@@ -39,8 +39,8 @@ def minimax_alpha_beta(n: tuple, maximizer_turn: bool, alpha: int, beta: int):
             evaluated_nodes += res_nodes
             alpha = max(alpha, res_eval)
             if alpha >= beta:
-                return alpha, evaluated_nodes
-        return alpha, evaluated_nodes
+                return alpha, evaluated_nodes + 1
+        return alpha, evaluated_nodes + 1
     else:
         evaluated_nodes = 0
         for s in successor(n, False):
@@ -48,8 +48,8 @@ def minimax_alpha_beta(n: tuple, maximizer_turn: bool, alpha: int, beta: int):
             evaluated_nodes += res_nodes
             beta = min(beta, res_eval)
             if alpha >= beta:
-                return beta, evaluated_nodes
-        return beta, evaluated_nodes
+                return beta, evaluated_nodes + 1
+        return beta, evaluated_nodes + 1
 
 
 # depth_limited_minimax
@@ -65,7 +65,7 @@ def depth_limited_minimax(n: tuple, d: int, maximizer_turn: bool):
             res_eval, res_nodes = depth_limited_minimax(s, d - 1, False)
             evaluated_nodes += res_nodes
             v = max(v, res_eval)
-        return v, evaluated_nodes
+        return v, evaluated_nodes + 1
     else:
         v = inf
         evaluated_nodes = 0
@@ -73,7 +73,7 @@ def depth_limited_minimax(n: tuple, d: int, maximizer_turn: bool):
             res_eval, res_nodes = depth_limited_minimax(s, d - 1, True)
             evaluated_nodes += res_nodes
             v = min(v, res_eval)
-        return v, evaluated_nodes
+        return v, evaluated_nodes + 1
 
 
 # depth_limited_minimax_alpha_beta
@@ -89,8 +89,8 @@ def depth_limited_minimax_alpha_beta(n: tuple, d: int, maximizer_turn: bool, alp
             evaluated_nodes += res_nodes
             alpha = max(alpha, res_eval)
             if alpha >= beta:
-                return alpha, evaluated_nodes
-        return alpha, evaluated_nodes
+                return alpha, evaluated_nodes + 1
+        return alpha, evaluated_nodes + 1
     else:
         evaluated_nodes = 0
         for s in successor(n, False):
@@ -98,8 +98,8 @@ def depth_limited_minimax_alpha_beta(n: tuple, d: int, maximizer_turn: bool, alp
             evaluated_nodes += res_nodes
             beta = min(beta, res_eval)
             if alpha >= beta:
-                return beta, evaluated_nodes
-        return beta, evaluated_nodes
+                return beta, evaluated_nodes + 1
+        return beta, evaluated_nodes + 1
 
 
 def is_final_state(n: tuple):

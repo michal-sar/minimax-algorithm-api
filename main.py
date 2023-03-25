@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from asyncio import Event, get_event_loop, wait_for, CancelledError
 from multiprocessing.pool import Pool
@@ -13,12 +13,13 @@ from connect_four import connect_four
 app = FastAPI()
 
 origins = [
+  "http://localhost:8080",
   "https://minimax-algorithm.netlify.app/",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origins],
+    allow_origins=['*'],
     allow_credentials=True,
 )
 
@@ -127,6 +128,25 @@ async def apply_async_task(websocket, func, *args):
         await websocket.send_json({"status": "timeout"})
         print("Timeout!")
         raise
+
+
+@app.get("/heuristic_function_tic_tac_toe/{board}")
+async def heuristic_function_tic_tac_toe(
+    board: str = Depends(validate_tic_tac_toe_board),
+):
+    h = tic_tac_toe.heuristic(board)
+    print(h)
+    return {"estimation": h}
+
+
+@app.get("/heuristic_function_connect_four/{board}")
+async def heuristic_function_connect_four(
+    board: str = Depends(validate_connect_four_board),
+):
+    yellow_tokens, token_mask = interpret_connect_four_board(board)
+    _, h = connect_four.heuristic(yellow_tokens, token_mask, 0)
+    print(h)
+    return {"estimation": h}
 
 
 @app.websocket("/ws")
