@@ -29,13 +29,15 @@ def minimax(n: tuple, maximizer_turn: bool):
 # minimax_alpha_beta
 
 @lru_cache(maxsize=None)
-def minimax_alpha_beta(n: tuple, maximizer_turn: bool, alpha: int, beta: int):
+def minimax_alpha_beta(n: tuple, maximizer_turn: bool,
+                       alpha: int, beta: int):
     if is_final_state(n):
         return utility(n), 1
     if maximizer_turn:
         evaluated_nodes = 0
         for s in successor(n, True):
-            res_eval, res_nodes = minimax_alpha_beta(s, False, alpha, beta)
+            res_eval, res_nodes = minimax_alpha_beta(
+                s, False, alpha, beta)
             evaluated_nodes += res_nodes
             alpha = max(alpha, res_eval)
             if alpha >= beta:
@@ -44,7 +46,8 @@ def minimax_alpha_beta(n: tuple, maximizer_turn: bool, alpha: int, beta: int):
     else:
         evaluated_nodes = 0
         for s in successor(n, False):
-            res_eval, res_nodes = minimax_alpha_beta(s, True, alpha, beta)
+            res_eval, res_nodes = minimax_alpha_beta(
+                s, True, alpha, beta)
             evaluated_nodes += res_nodes
             beta = min(beta, res_eval)
             if alpha >= beta:
@@ -55,14 +58,16 @@ def minimax_alpha_beta(n: tuple, maximizer_turn: bool, alpha: int, beta: int):
 # depth_limited_minimax
 
 @lru_cache(maxsize=None)
-def depth_limited_minimax(n: tuple, d: int, maximizer_turn: bool):
+def depth_limited_minimax(n: tuple, d: int,
+                          maximizer_turn: bool):
     if is_final_state(n) or d == 0:
         return heuristic(n), 1
     if maximizer_turn:
         v = -inf
         evaluated_nodes = 0
         for s in successor(n, True):
-            res_eval, res_nodes = depth_limited_minimax(s, d - 1, False)
+            res_eval, res_nodes = depth_limited_minimax(
+                s, d - 1, False)
             evaluated_nodes += res_nodes
             v = max(v, res_eval)
         return v, evaluated_nodes + 1
@@ -70,7 +75,8 @@ def depth_limited_minimax(n: tuple, d: int, maximizer_turn: bool):
         v = inf
         evaluated_nodes = 0
         for s in successor(n, False):
-            res_eval, res_nodes = depth_limited_minimax(s, d - 1, True)
+            res_eval, res_nodes = depth_limited_minimax(
+                s, d - 1, True)
             evaluated_nodes += res_nodes
             v = min(v, res_eval)
         return v, evaluated_nodes + 1
@@ -79,13 +85,16 @@ def depth_limited_minimax(n: tuple, d: int, maximizer_turn: bool):
 # depth_limited_minimax_alpha_beta
 
 @lru_cache(maxsize=None)
-def depth_limited_minimax_alpha_beta(n: tuple, d: int, maximizer_turn: bool, alpha: int, beta: int):
+def depth_limited_minimax_alpha_beta(n: tuple, d: int,
+                                     maximizer_turn: bool,
+                                     alpha: int, beta: int):
     if is_final_state(n) or d == 0:
         return heuristic(n), 1
     if maximizer_turn:
         evaluated_nodes = 0
         for s in successor(n, True):
-            res_eval, res_nodes = depth_limited_minimax_alpha_beta(s, d - 1, False, alpha, beta)
+            res_eval, res_nodes = depth_limited_minimax_alpha_beta(
+                s, d - 1, False, alpha, beta)
             evaluated_nodes += res_nodes
             alpha = max(alpha, res_eval)
             if alpha >= beta:
@@ -94,7 +103,8 @@ def depth_limited_minimax_alpha_beta(n: tuple, d: int, maximizer_turn: bool, alp
     else:
         evaluated_nodes = 0
         for s in successor(n, False):
-            res_eval, res_nodes = depth_limited_minimax_alpha_beta(s, d - 1, True, alpha, beta)
+            res_eval, res_nodes = depth_limited_minimax_alpha_beta(
+                s, d - 1, True, alpha, beta)
             evaluated_nodes += res_nodes
             beta = min(beta, res_eval)
             if alpha >= beta:
@@ -156,15 +166,13 @@ def heuristic(n: tuple):
                         ]
     h = 0
     for pattern in winning_patterns:
-        if (pattern[0] == 'x'
-            and pattern[0] == pattern[1]) or (pattern[0] == 'x'
-                                              and pattern[0] == pattern[2]) or (pattern[1] == 'x'
-                                                                                and pattern[1] == pattern[2]):
+        if ((pattern[0] == 'x' and pattern[0] == pattern[1])
+                or (pattern[0] == 'x' and pattern[0] == pattern[2])
+                or (pattern[1] == 'x' and pattern[1] == pattern[2])):
             h += 0.15
-        if (pattern[0] == 'o'
-            and pattern[0] == pattern[1]) or (pattern[0] == 'o'
-                                              and pattern[0] == pattern[2]) or (pattern[1] == 'o'
-                                                                                and pattern[1] == pattern[2]):
+        if ((pattern[0] == 'o' and pattern[0] == pattern[1])
+                or (pattern[0] == 'o' and pattern[0] == pattern[2])
+                or (pattern[1] == 'o' and pattern[1] == pattern[2])):
             h -= 0.15
     return h
 

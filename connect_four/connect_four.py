@@ -5,7 +5,9 @@ from math import inf
 # minimax
 
 @lru_cache(maxsize=None)
-def minimax(yellow_tokens: int, token_mask: int, maximizer_turn: bool):
+def minimax(yellow_tokens: int,
+            token_mask: int,
+            maximizer_turn: bool):
     if maximizer_turn:
         red_tokens = ~yellow_tokens & token_mask
         is_final_state, u = utility(red_tokens, token_mask)
@@ -16,7 +18,8 @@ def minimax(yellow_tokens: int, token_mask: int, maximizer_turn: bool):
         for move in possible_moves(token_mask):
             successor_yellow_tokens = yellow_tokens | move
             successor_mask = token_mask | move
-            res_eval, res_nodes = minimax(successor_yellow_tokens, successor_mask, False)
+            res_eval, res_nodes = minimax(
+                successor_yellow_tokens, successor_mask, False)
             evaluated_nodes += res_nodes
             v = max(v, res_eval)
         return v, evaluated_nodes + 1
@@ -28,7 +31,8 @@ def minimax(yellow_tokens: int, token_mask: int, maximizer_turn: bool):
         evaluated_nodes = 0
         for move in possible_moves(token_mask):
             successor_mask = token_mask | move
-            res_eval, res_nodes = minimax(yellow_tokens, successor_mask, True)
+            res_eval, res_nodes = minimax(
+                yellow_tokens, successor_mask, True)
             evaluated_nodes += res_nodes
             v = min(v, res_eval)
         return v, evaluated_nodes + 1
@@ -37,7 +41,10 @@ def minimax(yellow_tokens: int, token_mask: int, maximizer_turn: bool):
 # minimax_alpha_beta
 
 @lru_cache(maxsize=None)
-def minimax_alpha_beta(yellow_tokens: int, token_mask: int, maximizer_turn: bool, alpha: int, beta: int):
+def minimax_alpha_beta(yellow_tokens: int,
+                       token_mask: int,
+                       maximizer_turn: bool,
+                       alpha: int, beta: int):
     if maximizer_turn:
         red_tokens = ~yellow_tokens & token_mask
         is_final_state, u = utility(red_tokens, token_mask)
@@ -47,7 +54,9 @@ def minimax_alpha_beta(yellow_tokens: int, token_mask: int, maximizer_turn: bool
         for move in possible_moves(token_mask):
             successor_yellow_tokens = yellow_tokens | move
             successor_token_mask = token_mask | move
-            res_eval, res_nodes = minimax_alpha_beta(successor_yellow_tokens, successor_token_mask, False, alpha, beta)
+            res_eval, res_nodes = minimax_alpha_beta(
+                successor_yellow_tokens, successor_token_mask,
+                False, alpha, beta)
             evaluated_nodes += res_nodes
             alpha = max(alpha, res_eval)
             if alpha >= beta:
@@ -60,7 +69,9 @@ def minimax_alpha_beta(yellow_tokens: int, token_mask: int, maximizer_turn: bool
         evaluated_nodes = 0
         for move in possible_moves(token_mask):
             successor_token_mask = token_mask | move
-            res_eval, res_nodes = minimax_alpha_beta(yellow_tokens, successor_token_mask, True, alpha, beta)
+            res_eval, res_nodes = minimax_alpha_beta(
+                yellow_tokens, successor_token_mask,
+                True, alpha, beta)
             evaluated_nodes += res_nodes
             beta = min(beta, res_eval)
             if alpha >= beta:
@@ -71,7 +82,9 @@ def minimax_alpha_beta(yellow_tokens: int, token_mask: int, maximizer_turn: bool
 # depth_limited_minimax
 
 @lru_cache(maxsize=None)
-def depth_limited_minimax(yellow_tokens: int, token_mask: int, d: int, maximizer_turn: bool):
+def depth_limited_minimax(yellow_tokens: int,
+                          token_mask: int, d: int,
+                          maximizer_turn: bool):
     if maximizer_turn:
         red_tokens = ~yellow_tokens & token_mask
         is_final_state, h = heuristic(red_tokens, token_mask, d)
@@ -82,7 +95,9 @@ def depth_limited_minimax(yellow_tokens: int, token_mask: int, d: int, maximizer
         for move in possible_moves(token_mask):
             successor_yellow_tokens = yellow_tokens | move
             successor_mask = token_mask | move
-            res_eval, res_nodes = depth_limited_minimax(successor_yellow_tokens, successor_mask, d - 1, False)
+            res_eval, res_nodes = depth_limited_minimax(
+                successor_yellow_tokens, successor_mask,
+                d - 1, False)
             evaluated_nodes += res_nodes
             v = max(v, res_eval)
         return v, evaluated_nodes + 1
@@ -94,7 +109,9 @@ def depth_limited_minimax(yellow_tokens: int, token_mask: int, d: int, maximizer
         evaluated_nodes = 0
         for move in possible_moves(token_mask):
             successor_mask = token_mask | move
-            res_eval, res_nodes = depth_limited_minimax(yellow_tokens, successor_mask, d - 1, True)
+            res_eval, res_nodes = depth_limited_minimax(
+                yellow_tokens, successor_mask,
+                d - 1, True)
             evaluated_nodes += res_nodes
             v = min(v, res_eval)
         return v, evaluated_nodes + 1
@@ -103,8 +120,10 @@ def depth_limited_minimax(yellow_tokens: int, token_mask: int, d: int, maximizer
 # depth_limited_minimax_alpha_beta
 
 @lru_cache(maxsize=None)
-def depth_limited_minimax_alpha_beta(yellow_tokens: int, token_mask: int, d: int,
-                                     maximizer_turn: bool, alpha: int, beta: int):
+def depth_limited_minimax_alpha_beta(yellow_tokens: int,
+                                     token_mask: int, d: int,
+                                     maximizer_turn: bool,
+                                     alpha: int, beta: int):
     if maximizer_turn:
         red_tokens = ~yellow_tokens & token_mask
         is_final_state, h = heuristic(red_tokens, token_mask, d)
@@ -114,8 +133,9 @@ def depth_limited_minimax_alpha_beta(yellow_tokens: int, token_mask: int, d: int
         for move in possible_moves(token_mask):
             successor_yellow_tokens = yellow_tokens | move
             successor_token_mask = token_mask | move
-            res_eval, res_nodes = depth_limited_minimax_alpha_beta(successor_yellow_tokens, successor_token_mask, d - 1,
-                                                                   False, alpha, beta)
+            res_eval, res_nodes = depth_limited_minimax_alpha_beta(
+                successor_yellow_tokens, successor_token_mask,
+                d - 1, False, alpha, beta)
             evaluated_nodes += res_nodes
             alpha = max(alpha, res_eval)
             if alpha >= beta:
@@ -128,8 +148,9 @@ def depth_limited_minimax_alpha_beta(yellow_tokens: int, token_mask: int, d: int
         evaluated_nodes = 0
         for move in possible_moves(token_mask):
             successor_token_mask = token_mask | move
-            res_eval, res_nodes = depth_limited_minimax_alpha_beta(yellow_tokens, successor_token_mask, d - 1,
-                                                                   True, alpha, beta)
+            res_eval, res_nodes = depth_limited_minimax_alpha_beta(
+                yellow_tokens, successor_token_mask,
+                d - 1, True, alpha, beta)
             evaluated_nodes += res_nodes
             beta = min(beta, res_eval)
             if alpha >= beta:
@@ -213,7 +234,8 @@ def heuristic(tokens: int, token_mask: int, d: int):
     pattern_mask &= 118365240
     pattern_mask &= buffer_diagonal2
     h += bin(pattern_mask).count('1')
-    pattern_mask = (opponent_tokens | (opponent_tokens >> 1)) & 137412980756383
+    pattern_mask = (opponent_tokens | (opponent_tokens >> 1)) \
+        & 137412980756383
     pattern_mask &= (pattern_mask >> 2)
     pattern_mask &= opponent_buffer_vertical
     h -= bin(pattern_mask).count('1')
@@ -222,7 +244,8 @@ def heuristic(tokens: int, token_mask: int, d: int):
     pattern_mask &= 31028737590151
     pattern_mask &= opponent_buffer_vertical
     h -= bin(pattern_mask).count('1')
-    pattern_mask = (opponent_tokens | (opponent_tokens >> 7)) & 2181708111807
+    pattern_mask = (opponent_tokens | (opponent_tokens >> 7)) \
+        & 2181708111807
     pattern_mask &= (pattern_mask >> 14)
     pattern_mask &= opponent_buffer_horizontal
     h -= bin(pattern_mask).count('1')
@@ -231,7 +254,8 @@ def heuristic(tokens: int, token_mask: int, d: int):
     pattern_mask &= 133160895
     pattern_mask &= opponent_buffer_horizontal
     h -= bin(pattern_mask).count('1')
-    pattern_mask = (opponent_tokens | (opponent_tokens >> 8)) & 1073538912159
+    pattern_mask = (opponent_tokens | (opponent_tokens >> 8)) \
+        & 1073538912159
     pattern_mask &= (pattern_mask >> 16)
     pattern_mask &= opponent_buffer_diagonal1
     h -= bin(pattern_mask).count('1')
@@ -240,7 +264,8 @@ def heuristic(tokens: int, token_mask: int, d: int):
     pattern_mask &= 14795655
     pattern_mask &= opponent_buffer_diagonal1
     h -= bin(pattern_mask).count('1')
-    pattern_mask = (opponent_tokens | (opponent_tokens >> 6)) & 2147077824318
+    pattern_mask = (opponent_tokens | (opponent_tokens >> 6)) \
+        & 2147077824318
     pattern_mask &= (pattern_mask >> 12)
     pattern_mask &= opponent_buffer_diagonal2
     h -= bin(pattern_mask).count('1')
@@ -276,4 +301,5 @@ def utility(tokens: int, token_mask: int):
 def possible_moves(token_mask: int):
     for index in range(7):
         if (token_mask >> index * 7 + 5) & 1 == 0:
-            yield ((((1 << 6) - 1) << index * 7) & token_mask) + (1 << index * 7)
+            yield ((((1 << 6) - 1) << index * 7) & token_mask) \
+                + (1 << index * 7)
