@@ -15,18 +15,17 @@ app = FastAPI()
 
 origins = [
   "http://localhost:8080",
-  "https://minimax-algorithm.netlify.app/",
+  "https://minimax-algorithm.netlify.app",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['*'],
-    allow_credentials=True,
+    allow_origins=origins,
 )
 
-current_websocket_connections = 0
-current_workers = 0
-current_workers_change = Event()
+curr_ws_connections = 0
+curr_workers = 0
+curr_workers_change = Event()
 
 
 def validate_tic_tac_toe_board(board: str):
@@ -78,7 +77,7 @@ def validate_connect_four_board(board: str):
     return board
 
 
-def interpret_connect_four_board(board: str):
+def encode_connect_four_board(board: str):
     columns = board.split(",")
     yellow_tokens = 0
     token_mask = 0
@@ -112,48 +111,52 @@ def validate_depth_limit(depth_limit: bool = False,
     return depth_limit_value
 
 
-async def apply_async_task(websocket, func, *args):
-    global current_workers
+async def apply_async_task(ws, func, *args):
+    global curr_workers
 
-    while not current_workers < settings.worker_limit:
-        await websocket.send_json({"status": "waiting"})
-        await current_workers_change.wait()
-        current_workers_change.clear()
+    while not curr_workers < settings.worker_limit:
+        await ws.send_json({"status": "waiting"})
+        await curr_workers_change.wait()
 
-    current_workers += 1
+    curr_workers_change.clear()
+    curr_workers += 1
+
     pool = Pool(1)
     loop = get_event_loop()
     future = loop.create_future()
 
     def future_set_result(result):
         future.set_result(result)
-
     pool.apply_async(func, args, callback=future_set_result)
-    await websocket.send_json({"status": "running"})
+    await ws.send_json({"status": "running"})
 
     try:
         result = await wait_for(
             future, timeout=settings.task_timeout)
-        pool.terminate()
-        current_workers -= 1
-        current_workers_change.set()
-        await websocket.send_json({"status": "complete",
-                                   "evaluations": result[0],
-                                   "evaluated_nodes": result[1]})
+
+        pool.close()
+        curr_workers -= 1
+        curr_workers_change.set()
+        await ws.send_json({"status": "complete",
+                            "evaluations": result[0],
+                            "evaluated_nodes": result[1]})
+
         print(f"Finished: {result}")
 
     except CancelledError:
         pool.terminate()
-        current_workers -= 1
-        current_workers_change.set()
+        curr_workers -= 1
+        curr_workers_change.set()
+
         print("Cancelled!")
         raise
 
     except TimeoutError:
         pool.terminate()
-        current_workers -= 1
-        current_workers_change.set()
-        await websocket.send_json({"status": "timeout"})
+        curr_workers -= 1
+        curr_workers_change.set()
+        await ws.send_json({"status": "timeout"})
+
         print("Timeout!")
         raise
 
@@ -163,7 +166,6 @@ async def heuristic_function_tic_tac_toe(
     board: str = Depends(validate_tic_tac_toe_board),
 ):
     h = tic_tac_toe.heuristic(board)
-    print(h)
     return {"estimation": h}
 
 
@@ -171,60 +173,57 @@ async def heuristic_function_tic_tac_toe(
 async def heuristic_function_connect_four(
     board: str = Depends(validate_connect_four_board),
 ):
-    yellow_tokens, token_mask = interpret_connect_four_board(board)
+    yellow_tokens, token_mask = encode_connect_four_board(board)
     _, h = connect_four.heuristic(yellow_tokens, token_mask, 0)
-    print(h)
     return {"estimation": h}
 
 
 @app.websocket("/ws")
 async def ws_endpoint(
-    websocket: WebSocket,
+    ws: WebSocket,
 ):
-    current_task = None
-    global current_websocket_connections
-
+    curr_task = None
+    global curr_ws_connections
     loop = get_event_loop()
 
-    if not current_websocket_connections < \
-            settings.websocket_connection_limit:
-        await websocket.accept()
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+    if not curr_ws_connections < settings.ws_connection_limit:
+        await ws.accept()
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    await websocket.accept()
-    current_websocket_connections += 1
-    print(f"Number of connections: {current_websocket_connections}")
+    await ws.accept()
+    curr_ws_connections += 1
+    print(f"Number of connections: {curr_ws_connections}")
+
     try:
         while True:
-            message = await websocket.receive_text()
+            message = await ws.receive_text()
             data = loads(message)
 
             if data["type"] == "tic_tac_toe":
-                if current_task is not None:
-                    current_task.cancel()
-                current_task = loop.create_task(
+                if curr_task is not None:
+                    curr_task.cancel()
+                curr_task = loop.create_task(
                     apply_async_task(
-                        websocket, evaluate_tic_tac_toe, data))
+                        ws, evaluate_tic_tac_toe, data))
 
             elif data["type"] == "connect_four":
-                if current_task is not None:
-                    current_task.cancel()
-                current_task = loop.create_task(
+                if curr_task is not None:
+                    curr_task.cancel()
+                curr_task = loop.create_task(
                     apply_async_task(
-                        websocket, evaluate_connect_four, data))
+                        ws, evaluate_connect_four, data))
 
             elif data["type"] == "cancel_task":
-                if current_task is not None:
-                    current_task.cancel()
-                    current_task = None
+                if curr_task is not None:
+                    curr_task.cancel()
+                    curr_task = None
 
     except WebSocketDisconnect:
-        if current_task is not None:
-            current_task.cancel()
-        current_websocket_connections -= 1
-        print(f"Number of connections: \
-              {current_websocket_connections}")
+        if curr_task is not None:
+            curr_task.cancel()
+        curr_ws_connections -= 1
+        print(f"Number of connections: {curr_ws_connections}")
 
 
 def evaluate_tic_tac_toe(data):
@@ -314,7 +313,7 @@ def evaluate_connect_four(data):
     depth_limit_value = validate_depth_limit(
         data["depth_limit"], data["depth_limit_value"])
 
-    yellow_tokens, token_mask = interpret_connect_four_board(board)
+    yellow_tokens, token_mask = encode_connect_four_board(board)
 
     y_count = bin(yellow_tokens).count("1")
     r_count = bin(token_mask).count("1") - y_count

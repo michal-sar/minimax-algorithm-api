@@ -1,10 +1,10 @@
-from functools import lru_cache
+from functools import cache
 from math import inf
 
 
 # minimax
 
-@lru_cache(maxsize=None)
+@cache
 def minimax(n: tuple, maximizer_turn: bool):
     if is_final_state(n):
         return utility(n), 1
@@ -28,7 +28,7 @@ def minimax(n: tuple, maximizer_turn: bool):
 
 # minimax_alpha_beta
 
-@lru_cache(maxsize=None)
+@cache
 def minimax_alpha_beta(n: tuple, maximizer_turn: bool,
                        alpha: int, beta: int):
     if is_final_state(n):
@@ -57,7 +57,7 @@ def minimax_alpha_beta(n: tuple, maximizer_turn: bool,
 
 # depth_limited_minimax
 
-@lru_cache(maxsize=None)
+@cache
 def depth_limited_minimax(n: tuple, d: int,
                           maximizer_turn: bool):
     if is_final_state(n) or d == 0:
@@ -84,7 +84,7 @@ def depth_limited_minimax(n: tuple, d: int,
 
 # depth_limited_minimax_alpha_beta
 
-@lru_cache(maxsize=None)
+@cache
 def depth_limited_minimax_alpha_beta(n: tuple, d: int,
                                      maximizer_turn: bool,
                                      alpha: int, beta: int):
@@ -93,8 +93,9 @@ def depth_limited_minimax_alpha_beta(n: tuple, d: int,
     if maximizer_turn:
         evaluated_nodes = 0
         for s in successor(n, True):
-            res_eval, res_nodes = depth_limited_minimax_alpha_beta(
-                s, d - 1, False, alpha, beta)
+            res_eval, res_nodes \
+                = depth_limited_minimax_alpha_beta(
+                    s, d - 1, False, alpha, beta)
             evaluated_nodes += res_nodes
             alpha = max(alpha, res_eval)
             if alpha >= beta:
@@ -103,8 +104,9 @@ def depth_limited_minimax_alpha_beta(n: tuple, d: int,
     else:
         evaluated_nodes = 0
         for s in successor(n, False):
-            res_eval, res_nodes = depth_limited_minimax_alpha_beta(
-                s, d - 1, True, alpha, beta)
+            res_eval, res_nodes \
+                = depth_limited_minimax_alpha_beta(
+                    s, d - 1, True, alpha, beta)
             evaluated_nodes += res_nodes
             beta = min(beta, res_eval)
             if alpha >= beta:

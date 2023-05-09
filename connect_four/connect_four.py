@@ -1,16 +1,17 @@
-from functools import lru_cache
+from functools import cache
 from math import inf
 
 
 # minimax
 
-@lru_cache(maxsize=None)
+@cache
 def minimax(yellow_tokens: int,
             token_mask: int,
             maximizer_turn: bool):
     if maximizer_turn:
         red_tokens = ~yellow_tokens & token_mask
-        is_final_state, u = utility(red_tokens, token_mask)
+        is_final_state, u = utility(
+            red_tokens, token_mask)
         if is_final_state:
             return -u, 1
         v = -inf
@@ -24,7 +25,8 @@ def minimax(yellow_tokens: int,
             v = max(v, res_eval)
         return v, evaluated_nodes + 1
     else:
-        is_final_state, u = utility(yellow_tokens, token_mask)
+        is_final_state, u = utility(
+            yellow_tokens, token_mask)
         if is_final_state:
             return u, 1
         v = inf
@@ -40,14 +42,15 @@ def minimax(yellow_tokens: int,
 
 # minimax_alpha_beta
 
-@lru_cache(maxsize=None)
+@cache
 def minimax_alpha_beta(yellow_tokens: int,
                        token_mask: int,
                        maximizer_turn: bool,
                        alpha: int, beta: int):
     if maximizer_turn:
         red_tokens = ~yellow_tokens & token_mask
-        is_final_state, u = utility(red_tokens, token_mask)
+        is_final_state, u = utility(
+            red_tokens, token_mask)
         if is_final_state:
             return -u, 1
         evaluated_nodes = 0
@@ -63,7 +66,8 @@ def minimax_alpha_beta(yellow_tokens: int,
                 return alpha, evaluated_nodes + 1
         return alpha, evaluated_nodes + 1
     else:
-        is_final_state, u = utility(yellow_tokens, token_mask)
+        is_final_state, u = utility(
+            yellow_tokens, token_mask)
         if is_final_state:
             return u, 1
         evaluated_nodes = 0
@@ -81,13 +85,14 @@ def minimax_alpha_beta(yellow_tokens: int,
 
 # depth_limited_minimax
 
-@lru_cache(maxsize=None)
+@cache
 def depth_limited_minimax(yellow_tokens: int,
                           token_mask: int, d: int,
                           maximizer_turn: bool):
     if maximizer_turn:
         red_tokens = ~yellow_tokens & token_mask
-        is_final_state, h = heuristic(red_tokens, token_mask, d)
+        is_final_state, h = heuristic(
+            red_tokens, token_mask, d)
         if d == 0 or is_final_state:
             return -h, 1
         v = -inf
@@ -102,7 +107,8 @@ def depth_limited_minimax(yellow_tokens: int,
             v = max(v, res_eval)
         return v, evaluated_nodes + 1
     else:
-        is_final_state, h = heuristic(yellow_tokens, token_mask, d)
+        is_final_state, h = heuristic(
+            yellow_tokens, token_mask, d)
         if d == 0 or is_final_state:
             return h, 1
         v = inf
@@ -119,38 +125,44 @@ def depth_limited_minimax(yellow_tokens: int,
 
 # depth_limited_minimax_alpha_beta
 
-@lru_cache(maxsize=None)
+@cache
 def depth_limited_minimax_alpha_beta(yellow_tokens: int,
                                      token_mask: int, d: int,
                                      maximizer_turn: bool,
                                      alpha: int, beta: int):
     if maximizer_turn:
         red_tokens = ~yellow_tokens & token_mask
-        is_final_state, h = heuristic(red_tokens, token_mask, d)
+        is_final_state, h = heuristic(
+            red_tokens, token_mask, d)
         if d == 0 or is_final_state:
             return -h, 1
         evaluated_nodes = 0
         for move in possible_moves(token_mask):
             successor_yellow_tokens = yellow_tokens | move
             successor_token_mask = token_mask | move
-            res_eval, res_nodes = depth_limited_minimax_alpha_beta(
-                successor_yellow_tokens, successor_token_mask,
-                d - 1, False, alpha, beta)
+            res_eval, res_nodes \
+                = depth_limited_minimax_alpha_beta(
+                    successor_yellow_tokens,
+                    successor_token_mask,
+                    d - 1, False, alpha, beta)
             evaluated_nodes += res_nodes
             alpha = max(alpha, res_eval)
             if alpha >= beta:
                 return alpha, evaluated_nodes + 1
         return alpha, evaluated_nodes + 1
     else:
-        is_final_state, h = heuristic(yellow_tokens, token_mask, d)
+        is_final_state, h = heuristic(
+            yellow_tokens, token_mask, d)
         if d == 0 or is_final_state:
             return h, 1
         evaluated_nodes = 0
         for move in possible_moves(token_mask):
             successor_token_mask = token_mask | move
-            res_eval, res_nodes = depth_limited_minimax_alpha_beta(
-                yellow_tokens, successor_token_mask,
-                d - 1, True, alpha, beta)
+            res_eval, res_nodes \
+                = depth_limited_minimax_alpha_beta(
+                    yellow_tokens,
+                    successor_token_mask,
+                    d - 1, True, alpha, beta)
             evaluated_nodes += res_nodes
             beta = min(beta, res_eval)
             if alpha >= beta:
@@ -177,7 +189,7 @@ def heuristic(tokens: int, token_mask: int, d: int):
     if pattern_mask == 1:
         return True, 0
     if d != 0:
-        return False, 0
+        return False, None
     h = 0
     not_tokens = ~tokens
     opponent_tokens = ~tokens & token_mask
